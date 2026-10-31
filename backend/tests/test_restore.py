@@ -381,6 +381,86 @@ def test_offline_forecast_passes_its_own_claim_check() -> None:
           thin["available"] is False, str(thin.get("claim")))
 
 
+@reports
+def test_forecast_closes_the_review_loopholes() -> None:
+    """Regression tests for five defects found by review of the forecast.
+
+    Each one passed before the fix, so each is a real guard rather than a
+    restatement of the implementation.
+    """
+    print("\nForecast: review findings stay closed")
+    hist = risk.recurrence(_rows(), NOW)
+    good = {"claim": "P-101 is the likely next escalation.", "asset": "P-101",
+            "mechanism": "wear", "horizon_h": 1.0, "confidence": 0.6,
+            "basis": "3 occurrences", "scenario_keys": ["pump_degraded"]}
+
+    def verdict(args, h=hist):
+        return {c["name"]: c["passed"] for c in foresight.check_claim(args, h)}
+
+    # 3a. A one-occurrence class may not ride along on a well-evidenced one.
+    v = verdict(good | {"scenario_keys": ["pump_degraded", "tamper"]})
+    check("a thin class cited alongside a thick one is rejected",
+          v["basis_thick_enough"] is False)
+
+    # 3b. An asset that cannot be checked is not thereby acceptable.
+    blank = risk.recurrence(
+        [dict(r, diagnosis="no asset tags recorded") for r in _rows()], NOW)
+    v = verdict(good | {"asset": "PT-999"}, blank)
+    check("an asset claim with nothing to check it against is rejected",
+          v["asset_in_record"] is False)
+
+    # 2. A statement about WHEN needs a class recurring on an interval.
+    scattered = risk.recurrence(
+        [dict(r, created_at=t) for r, t in
+         zip(_rows()[:3], [NOW - 9060, NOW - 9000, NOW])], NOW)
+    sc = scattered["classes"][0]
+    check("widely scattered gaps are not called periodic",
+          sc["interval_model_holds"] is False, str(sc["interval_cv"]))
+    v = verdict(good | {"claim": "The pump is overdue."}, scattered)
+    check("an unsupported timing claim is rejected",
+          v["timing_claim_supported"] is False)
+    check("the same forecast without a timing claim is allowed",
+          verdict(good, scattered)["timing_claim_supported"] is True)
+    check("timing is allowed when a cited class really is periodic",
+          verdict(good | {"claim": "Expected within the hour."})
+          ["timing_claim_supported"] is True)
+
+    # 4. One gap is not a period.
+    one = risk.recurrence(_rows()[:2], NOW)
+    check("a single interval cannot establish periodicity",
+          one["classes"][0]["interval_model_holds"] is False)
+
+    # 1. The record says what it is.
+    check("the history reports its provenance",
+          hist["provenance"] == "demonstration" and
+          "triggered" in hist["provenance_note"])
+
+
+@reports
+def test_forecast_reports_a_pump_already_at_its_ceiling() -> None:
+    print("\nForecast: saturation is reported, not mistaken for a flat signal")
+
+    class Pinned:
+        class plant:
+            sim_time = 500.0
+
+        class metrics:
+            @staticmethod
+            def read(name, window_s, now_t):
+                if name == "pump.output_pct":
+                    return {"points": [(t, 100.0) for t in range(440, 500, 2)],
+                            "latest": 100.0}
+                return {"latest": 2.5, "trend": 0.4}
+
+    out = risk.project_live(Pinned(), 120.0)
+    check("a pump pinned at its ceiling is reported as saturated",
+          out.get("saturated") is True, str(out.get("reason")))
+    check("and is not dismissed as 'not climbing'",
+          "not climbing" not in str(out.get("reason") or ""))
+    check("the detail explains the consequence",
+          "no authority left" in (out.get("detail") or ""))
+
+
 if __name__ == "__main__":
     settings.autonomy = "full"
     for fn in (test_current_loop_maths, test_ground_truth_is_not_leaked,
@@ -394,7 +474,9 @@ if __name__ == "__main__":
                test_forecast_drops_the_periodic_model_when_it_stops_fitting,
                test_forecast_claim_check_rejects_unsupported_claims,
                test_forecast_agent_cannot_change_the_plant,
-               test_offline_forecast_passes_its_own_claim_check):
+               test_offline_forecast_passes_its_own_claim_check,
+               test_forecast_closes_the_review_loopholes,
+               test_forecast_reports_a_pump_already_at_its_ceiling):
         fn()
     print("\n" + "=" * 60)
     if FAILURES:

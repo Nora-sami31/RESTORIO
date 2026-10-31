@@ -21,6 +21,13 @@ export default function ForecastBanner({ data, onRun }) {
   const agent = data?.agent
   const live = data?.live
 
+  // The figures the record actually holds for each class the agent cited.
+  // Rendered beside the agent's own wording so a number that does not match
+  // the record is visible rather than taken on trust.
+  const cited = (agent?.scenario_keys || [])
+    .map((k) => (hist?.classes || []).find((c) => c.scenario_key === k))
+    .filter(Boolean)
+
   const run = async () => {
     setBusy(true)
     try { await onRun() } finally { setBusy(false) }
@@ -55,7 +62,7 @@ export default function ForecastBanner({ data, onRun }) {
           </span>
         )}
         <span className="muted mono" style={{ fontSize: 9.5, marginLeft: 'auto' }}>
-          {n} incidents · {span} h recorded
+          {n} incidents · {span} h of demonstration history
         </span>
         <button className="ghost" style={{ fontSize: 9.5, padding: '2px 7px' }}
                 disabled={busy} onClick={run}>
@@ -98,7 +105,7 @@ export default function ForecastBanner({ data, onRun }) {
             <span>confidence {agent.confidence}</span>
             <span>·</span>
             <span className={failed.length ? 'bad' : 'ok'}>
-              {agent.checks?.length - failed.length}/{agent.checks?.length} checks
+              {agent.checks?.length - failed.length}/{agent.checks?.length} structural checks
             </span>
           </div>
 
@@ -116,6 +123,24 @@ export default function ForecastBanner({ data, onRun }) {
             <div className="forecast-basis">
               <div><b>Mechanism.</b> {agent.mechanism}</div>
               <div style={{ marginTop: 4 }}><b>Basis.</b> {agent.basis}</div>
+
+              {cited.length > 0 && (
+                <div style={{ marginTop: 5 }}>
+                  <b>What the record holds.</b>
+                  <ul className="forecast-watch">
+                    {cited.map((c) => (
+                      <li key={c.scenario_key} className="mono">
+                        {c.scenario_key}: n={c.n}, {c.escalated} escalated
+                        {c.mean_interval_s
+                          ? `, mean gap ${(c.mean_interval_s / 3600).toFixed(2)} h`
+                          : ', no interval'}
+                        {c.interval_cv != null ? ` (spread ${c.interval_cv})` : ''}
+                        {c.interval_model_holds ? '' : ' — not periodic'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {live?.projectable && (
                 <div style={{ marginTop: 4 }}>
@@ -149,6 +174,19 @@ export default function ForecastBanner({ data, onRun }) {
               </div>
 
               <div className="muted" style={{ marginTop: 5, fontSize: 9.5 }}>
+                The checks test structure, not wording: that every cited class
+                exists and is thick enough, that the asset appears in the
+                record, that the horizon fits it, and that any claim about
+                timing rests on a class actually recurring on an interval.
+                They do not verify the prose above — compare it against the
+                recorded figures.
+              </div>
+              {hist?.provenance_note && (
+                <div className="muted" style={{ marginTop: 4, fontSize: 9.5 }}>
+                  {hist.provenance_note}
+                </div>
+              )}
+              <div className="muted" style={{ marginTop: 4, fontSize: 9.5 }}>
                 Advisory only. A forecast is not evidence for an intervention —
                 the agent cannot cite it to justify changing the plant.
               </div>

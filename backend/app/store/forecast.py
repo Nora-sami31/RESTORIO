@@ -47,6 +47,13 @@ MIN_FIT_R2 = 0.80
 # "overdue" would be a louder claim than the data supports.
 MODEL_HOLDS_RATIO = 3.0
 
+# Occurrences whose gaps scatter as widely as their mean are not periodic in
+# any useful sense -- gaps of 1 s and 999 s average to 500 s, and projecting
+# the next one at 500 s would be arithmetic rather than a pattern.  A class
+# must also have at least two gaps before it can be called periodic at all:
+# one gap is a coincidence with no variability to measure.
+MAX_INTERVAL_CV = 0.5
+
 # Asset tags as they appear in recorded diagnoses (PT-101, P-101, PLC-101...).
 # The forecast reports the assets a class actually named rather than letting
 # the model guess which equipment a fault class belongs to.
@@ -85,6 +92,19 @@ def _linfit(pts: list[tuple[float, float]]) -> dict[str, float] | None:
         ssr = sum((v - (slope * t + intercept)) ** 2 for t, v in pts)
         r2 = max(0.0, 1.0 - ssr / sst)
     return {"slope": slope, "intercept": intercept, "r2": r2}
+
+
+def _holds_reason(ratio: float | None, cv: float | None) -> str:
+    """Why a periodic projection is, or is not, meaningful for this class."""
+    if cv is None:
+        return "fewer than two intervals; periodicity cannot be assessed"
+    if cv > MAX_INTERVAL_CV:
+        return (f"gaps scatter too widely (spread {cv:.2f} of the mean); "
+                "the occurrences are not periodic")
+    if ratio is not None and ratio > MODEL_HOLDS_RATIO:
+        return (f"last gap is {ratio:.1f}x the mean interval; the class has "
+                "stopped recurring on it")
+    return "gaps are consistent and the class is recurring on its interval"
 
 
 def _basis(n: int) -> str:
@@ -152,7 +172,12 @@ def recurrence(rows: Iterable[dict[str, Any]], now_ts: float) -> dict[str, Any]:
         # not, and the projection is reported as not holding instead of as an
         # alarming negative number.
         ratio = (elapsed / mean_gap) if (mean_gap and mean_gap > 0) else None
-        model_holds = bool(ratio is not None and ratio <= MODEL_HOLDS_RATIO)
+        cv = (stdev / mean_gap) if (stdev is not None and mean_gap) else None
+        model_holds = bool(
+            ratio is not None and ratio <= MODEL_HOLDS_RATIO
+            # at least two gaps, so the spread is measurable at all
+            and cv is not None
+            and cv <= MAX_INTERVAL_CV)
 
         classes.append({
             "scenario_key": key,
@@ -174,7 +199,9 @@ def recurrence(rows: Iterable[dict[str, Any]], now_ts: float) -> dict[str, Any]:
             "due_in_s": round(due_in, 1) if due_in is not None else None,
             "overdue": bool(due_in is not None and due_in <= 0),
             "elapsed_over_interval": round(ratio, 2) if ratio is not None else None,
+            "interval_cv": round(cv, 2) if cv is not None else None,
             "interval_model_holds": model_holds,
+            "model_holds_reason": _holds_reason(ratio, cv),
             # A projection longer than the whole record is arithmetic, not
             # evidence.  Say which it is.
             "beyond_observed_span": bool(due_in is not None and due_in > span_s),
@@ -194,6 +221,15 @@ def recurrence(rows: Iterable[dict[str, Any]], now_ts: float) -> dict[str, Any]:
 
     return {
         "available": True,
+        # What this record actually is.  These incidents were raised by running
+        # scenarios against the simulator, so the gaps between them reflect
+        # when someone pressed a button, not how often equipment fails.  Every
+        # interval below inherits that caveat.
+        "provenance": "demonstration",
+        "provenance_note": (
+            "Incidents recorded while demonstrating RESTORIO. Intervals reflect "
+            "when scenarios were triggered, not natural equipment failure rates. "
+            "Outcome counts per fault class are unaffected."),
         "incidents": len(rows),
         "observed_span_s": round(span_s, 1),
         "observed_span_h": round(span_h, 2),
@@ -244,18 +280,22 @@ def project_live(engine: Any, window_s: float = 120.0) -> dict[str, Any]:
         "pressure_error_trend_bar": err.get("trend"),
     }
 
-    if r2 < MIN_FIT_R2:
-        return res | {"projectable": False,
-                      "reason": f"window does not fit a line (R²={r2:.2f})"}
-    if slope <= 0:
-        return res | {"projectable": False,
-                      "reason": "commanded output is not climbing"}
-
+    # Saturation is the state this projection exists to warn about, so it is
+    # reported whenever it is already true -- a flat series pinned at the
+    # ceiling is not "not climbing", it is the outcome we were watching for.
     remaining = OUTPUT_CEILING_PCT - latest
     if remaining <= 0:
         return res | {"projectable": True, "saturated": True, "eta_s": 0.0,
                       "detail": "commanded output is already at its ceiling; "
-                                "the controller has no authority left"}
+                                "the controller has no authority left and "
+                                "discharge pressure cannot be held"}
+
+    if r2 < MIN_FIT_R2:
+        return res | {"projectable": False, "saturated": False,
+                      "reason": f"window does not fit a line (R²={r2:.2f})"}
+    if slope <= 0:
+        return res | {"projectable": False, "saturated": False,
+                      "reason": "commanded output is not climbing"}
 
     eta = remaining / slope
     return res | {

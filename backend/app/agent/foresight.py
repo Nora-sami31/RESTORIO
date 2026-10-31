@@ -26,6 +26,7 @@ It sees the same closed-incident statistics an operator could read.
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any
 
@@ -35,6 +36,14 @@ from .brain import BrainError, ToolCall, make_brain
 
 MAX_ITERATIONS = 5
 MAX_TOOL_CALLS = 8
+
+# Phrases that assert *when* something will happen. A forecast may always say
+# what is likely; it may only say when if some cited class is genuinely
+# recurring on an interval.
+_TIMING_CLAIM = re.compile(
+    r"\boverdue\b|\bdue (?:in|within|now)\b|\bexpected (?:in|within|about)\b"
+    r"|\bwithin the next\b|\bfrom now\b|\bany (?:time|moment) now\b",
+    re.I)
 
 SYSTEM = """You are a reliability analyst for an industrial pumping station.
 
@@ -50,13 +59,22 @@ Tools available to you:
 
 Rules you must follow:
 
+0. This history was recorded while demonstrating the system. The gaps between
+   incidents reflect when scenarios were triggered, not how often equipment
+   actually fails. Outcome counts per fault class are still meaningful; the
+   intervals are not evidence of a natural failure rate, so do not present
+   them as one.
 1. Call read_incident_history before you record anything. You may not forecast
    from memory or assumption.
 2. Every number in your forecast must come from a tool result. Do not invent
-   counts, intervals or rates.
-3. Name the fault classes you relied on in scenario_keys. A class with fewer
-   than 3 recorded occurrences is too thin to carry a recurrence forecast; you
-   may mention it as a watch item but not as the basis of the claim.
+   counts, intervals or rates. Quote them as they appear, because an operator
+   reads your basis against the record.
+3. Name the fault classes you relied on in scenario_keys. EVERY class you list
+   must have 3 or more recorded occurrences. A thinner class belongs in watch,
+   never in scenario_keys.
+3b. Say when something will happen only if a cited class has
+   interval_model_holds = true. With no such class, give the likely failure
+   and what to watch, and state plainly that the timing cannot be predicted.
 4. If a class carries interval_model_holds = false, its occurrences are not
    periodic. Do not call it "overdue". Say the pattern exists but its timing is
    not predictable from this record.
@@ -158,13 +176,16 @@ def check_claim(args: dict[str, Any], hist: dict[str, Any]) -> list[dict[str, An
         f"cited classes present in the record: {known}" if known
         else f"cited classes not found in the record: {keys}")
 
-    # The basis of a recurrence claim needs enough occurrences to be a pattern.
-    thick = [k for k in known if by_key[k]["n"] >= stats.HEADLINE_MIN_N]
-    add("basis_thick_enough", bool(thick),
-        (f"{thick} each have {stats.HEADLINE_MIN_N}+ recorded occurrences")
-        if thick else
-        (f"no cited class reaches {stats.HEADLINE_MIN_N} occurrences; "
-         "too thin to carry a recurrence forecast"))
+    # Every class the claim rests on needs enough occurrences to be a pattern.
+    # Checking that *some* cited class is thick would let a one-occurrence
+    # class ride along on a well-evidenced one.
+    thin = [k for k in known if by_key[k]["n"] < stats.HEADLINE_MIN_N]
+    add("basis_thick_enough", bool(known) and not thin,
+        (f"every cited class has {stats.HEADLINE_MIN_N}+ recorded occurrences")
+        if known and not thin else
+        (f"{thin} below {stats.HEADLINE_MIN_N} occurrences; too thin to carry "
+         "a recurrence claim -- move them to watch items")
+        if thin else "no class cited")
 
     # A horizon longer than the record is arithmetic, not evidence.
     span_h = float(hist.get("observed_span_h") or 0.0)
@@ -174,14 +195,37 @@ def check_claim(args: dict[str, Any], hist: dict[str, Any]) -> list[dict[str, An
         if horizon <= span_h else
         f"horizon {horizon:.2f} h exceeds the {span_h:.2f} h of recorded history")
 
-    # An asset tag that appears in no recorded diagnosis is a guess.
+    # An asset tag that appears in no recorded diagnosis is a guess. When the
+    # cited classes name no assets at all there is nothing to check it
+    # against, which makes the claim unverifiable -- so it fails too, rather
+    # than passing for want of evidence.
     asset = str(args.get("asset") or "").strip()
     recorded = {a for k in known for a in (by_key[k].get("assets") or [])}
-    add("asset_in_record", (not asset) or (not recorded) or asset in recorded,
-        f"{asset} appears in the recorded diagnoses for {known}" if asset in recorded
-        else (f"no asset claimed; cited classes name {sorted(recorded)}" if not asset
-              else f"{asset} does not appear in the record for {known}: "
-                   f"{sorted(recorded)}"))
+    if not asset:
+        add("asset_in_record", True,
+            f"no asset claimed; cited classes name {sorted(recorded)}")
+    elif not recorded:
+        add("asset_in_record", False,
+            f"{asset} cannot be checked: the cited classes name no assets in "
+            "any recorded diagnosis")
+    else:
+        add("asset_in_record", asset in recorded,
+            f"{asset} appears in the recorded diagnoses for {known}"
+            if asset in recorded else
+            f"{asset} does not appear in the record for {known}: {sorted(recorded)}")
+
+    # A statement about WHEN needs a class that is actually recurring on an
+    # interval. This is the one piece of the narrative that is machine-
+    # checkable, and it is the piece most likely to be wrong.
+    text = f"{args.get('claim', '')} {args.get('basis', '')}"
+    timing = bool(_TIMING_CLAIM.search(text))
+    periodic = [k for k in known if by_key[k].get("interval_model_holds")]
+    add("timing_claim_supported", (not timing) or bool(periodic),
+        ("no timing asserted" if not timing else
+         f"timing rests on {periodic}, which are recurring on their interval"
+         if periodic else
+         "the text asserts when this will happen, but no cited class is "
+         "recurring on a usable interval"))
 
     conf = float(args.get("confidence") or 0.0)
     add("confidence_in_range", 0.0 < conf <= 1.0, f"confidence {conf}")

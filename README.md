@@ -176,13 +176,23 @@ conclusion against the record before an operator sees it.
 The claim check rejects a forecast that:
 
 - cites a fault class absent from the record,
-- rests on a class with fewer than three recorded occurrences,
-- names an asset appearing in no recorded diagnosis,
+- rests on **any** class with fewer than three recorded occurrences,
+- names an asset that appears in no recorded diagnosis, or that cannot be
+  checked because the cited classes name no assets at all,
+- states **when** something will happen without a cited class that is actually
+  recurring on an interval,
 - projects past the end of the recorded history,
 - or carries a confidence outside (0, 1].
 
 A rejected forecast is returned to the model with the failing checks attached,
 and it revises rather than being discarded.
+
+These checks test **structure, not wording**. They establish that the forecast
+rests on classes that exist and are thick enough, that its asset is in the
+record, that its horizon fits, and that any timing claim is supported. They do
+not verify that the model's prose quotes the record correctly, so the dashboard
+renders the recorded figures for every cited class beside the model's own
+wording rather than asking an operator to take it on trust.
 
 ### What it refuses to say
 
@@ -190,9 +200,10 @@ The refusals matter more than the forecast:
 
 - A fault class seen once has **no interval**. The record reports "single
   occurrence" rather than inventing a period from one data point.
-- When the time since the last occurrence dwarfs the mean interval between
-  occurrences, the periodic model is reported as **no longer holding** instead
-  of raising an "overdue" alarm the data does not support.
+- A class is called periodic only when it has at least two intervals and those
+  intervals are consistent. Occurrences whose gaps scatter as widely as their
+  mean, or whose last gap dwarfs that mean, are reported as **not periodic**
+  instead of raising an "overdue" alarm the data does not support.
 - A live window that does not fit a line is reported as **not projectable**
   rather than extrapolated.
 
@@ -210,6 +221,14 @@ read-only.
 The shipped history spans **13.4 hours across 17 incidents**, so forecasts are
 expressed in hours. The horizon check refuses anything longer than the record;
 this history cannot support a claim about next week.
+
+Those incidents were raised by **running scenarios against the simulator**. The
+gaps between them record when a scenario was triggered, not how often equipment
+fails, and the dashboard, the prompt and the stored record all say so. Outcome
+counts per fault class -- how often a class escalated rather than recovering --
+do not depend on that timing and remain meaningful. Establishing real failure
+frequencies would need operational or reliability data this prototype does not
+have.
 
 Offline, a rules baseline composes the same statistics into the same structure
 and is reported as rules rather than as reasoning.
