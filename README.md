@@ -218,9 +218,10 @@ intervention**, and the forecasting agent has no write tools -- it cannot reach
 the validator or the executor. A unit test asserts that its tool surface stays
 read-only.
 
-The shipped history spans **13.4 hours across 17 incidents**, so forecasts are
-expressed in hours. The horizon check refuses anything longer than the record;
-this history cannot support a claim about next week.
+The forecast horizon is bounded by the record itself: the horizon check refuses
+any projection longer than the span the database currently holds. A short record
+therefore yields forecasts in hours rather than days, and cannot support a claim
+about next week until the history grows to cover one.
 
 Those incidents were raised by **running scenarios against the simulator**. The
 gaps between them record when a scenario was triggered, not how often equipment
@@ -409,7 +410,10 @@ code revision.
 
 ## Inspect the saved investigations
 
-`backend/restorio_audit.db` ships with **17 recorded LLM incidents**.
+`backend/restorio_audit.db` ships with recorded LLM investigations from earlier
+runs, and every further run appends to it. The dashboard, the recurrence
+statistics and the forecast all read whatever the database currently holds, so
+no figure in the system is tied to a fixed incident count.
 
 Open **Incident history** in the dashboard to inspect their evidence, explanations,
 interventions, and recovery results.
