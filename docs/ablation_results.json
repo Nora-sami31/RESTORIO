@@ -1,0 +1,162 @@
+{
+  "part_a": {
+    "full_system_blocked": 8,
+    "total_bad_proposals": 8,
+    "per_guardrail": {
+      "revision_guard": {
+        "description": "proposal bound to the current config revision",
+        "blocked": 7,
+        "newly_allowed": [
+          "B5"
+        ]
+      },
+      "field_whitelist": {
+        "description": "only listed fields, inside their ranges",
+        "blocked": 7,
+        "newly_allowed": [
+          "B3"
+        ]
+      },
+      "prerequisites": {
+        "description": "fallback freshness before failover",
+        "blocked": 7,
+        "newly_allowed": [
+          "B6"
+        ]
+      },
+      "evidence_gate": {
+        "description": "containment needs an operational write in the log",
+        "blocked": 7,
+        "newly_allowed": [
+          "B4"
+        ]
+      },
+      "claim_check": {
+        "description": "a scaling change must reproduce the reference",
+        "blocked": 7,
+        "newly_allowed": [
+          "B1"
+        ]
+      },
+      "candidate_test": {
+        "description": "safe and non-regressive on an isolated copy",
+        "blocked": 8,
+        "newly_allowed": []
+      }
+    }
+  },
+  "part_b": {
+    "full": {
+      "final_status": "needs_review",
+      "true_pressure_bar": 8.0,
+      "false_recovery": false
+    },
+    "ablated": {
+      "final_status": "recovered",
+      "true_pressure_bar": 8.0,
+      "false_recovery": true
+    }
+  },
+  "part_c": {
+    "offline": {
+      "(none)": {
+        "correct": 11,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "revision_guard": {
+        "correct": 11,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "field_whitelist": {
+        "correct": 11,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "prerequisites": {
+        "correct": 11,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "evidence_gate": {
+        "correct": 11,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "claim_check": {
+        "correct": 11,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "candidate_test": {
+        "correct": 11,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "conclude_invariants": {
+        "correct": 11,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      }
+    },
+    "sloppy": {
+      "(none)": {
+        "correct": 4,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "revision_guard": {
+        "correct": 4,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "field_whitelist": {
+        "correct": 4,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "prerequisites": {
+        "correct": 4,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "evidence_gate": {
+        "correct": 2,
+        "incorrect_interventions": 5,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "claim_check": {
+        "correct": 2,
+        "incorrect_interventions": 2,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "candidate_test": {
+        "correct": 4,
+        "incorrect_interventions": 0,
+        "false_recoveries": 0,
+        "of": 11
+      },
+      "conclude_invariants": {
+        "correct": 1,
+        "incorrect_interventions": 0,
+        "false_recoveries": 10,
+        "of": 11
+      }
+    }
+  }
+}

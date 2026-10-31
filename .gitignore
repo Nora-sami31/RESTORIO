@@ -1,0 +1,23 @@
+# secrets
+.env
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# runtime artefacts
+*.db
+backend/restore_audit.db
+# ...except the shipped audit trail: a small set of recorded incidents so the
+# history panel is populated the moment the app is opened.
+!backend/restorio_audit.db
+
+# node / build
+node_modules/
+frontend/dist/
+
+# os
+.DS_Store
