@@ -1,4 +1,5 @@
 import { fmt } from '../lib/api.js'
+import ForecastBanner from './ForecastBanner.jsx'
 
 const TONE = {
   recovered: 'ok', recovered_under_containment: 'contain',
@@ -10,11 +11,13 @@ const TONE = {
  * the inspector — what happened, what evidence was used, what changed, which
  * checks passed — which is the point of keeping an audit trail at all.
  */
-export default function IncidentHistory({ rows, viewing, onOpen, onBackToLive }) {
+export default function IncidentHistory({ rows, viewing, onOpen, onBackToLive,
+                                          forecast, onRunForecast }) {
   if (!rows?.length) {
     return (
       <div className="panel">
         <h3>Incident history</h3>
+        <ForecastBanner data={forecast} onRun={onRunForecast} />
         <div className="muted">No closed incidents yet. Each one is written to
           the audit trail and can be reopened here afterwards.</div>
       </div>
@@ -25,6 +28,8 @@ export default function IncidentHistory({ rows, viewing, onOpen, onBackToLive })
       <h3>Incident history
         <span className="right muted">{rows.length} recorded</span>
       </h3>
+
+      <ForecastBanner data={forecast} onRun={onRunForecast} />
 
       {viewing && (
         <button className="primary" style={{ width: '100%', marginBottom: 8 }}

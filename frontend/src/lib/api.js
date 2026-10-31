@@ -17,6 +17,8 @@ export const api = {
   decoy:       ()            => fetch('/api/decoy').then(J),
   accessLog:   ()            => fetch('/api/access-log').then(J),
   incidents:   ()            => fetch('/api/incidents').then(J),
+  forecast:    ()            => fetch('/api/forecast').then(J),
+  runForecast: ()            => fetch('/api/forecast/run', { method: 'POST' }).then(J),
   incident:    (id)          => fetch(`/api/incident/${id}`).then(J),
   asset:       (id)          => fetch(`/api/asset/${id}`).then(J),
   evidence:    (q = '')      => fetch(`/api/evidence?query=${encodeURIComponent(q)}`).then(J),

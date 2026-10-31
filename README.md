@@ -58,6 +58,9 @@ identifying the remaining cause and verifying the resulting process behaviour.
 The operator dashboard and audit trail expose the evidence, hypotheses, proposals,
 tests, actions, verification, and monitoring results.
 
+A second agent reads the accumulated trail and forecasts what is likely to fail
+next. See [Forecasting the next failure](#forecasting-the-next-failure).
+
 ---
 
 ## Why it is agentic
@@ -154,6 +157,62 @@ Three autonomy modes are available:
 - **Supervised:** approval for every intervention.
 - **Guarded:** approval for high-risk interventions.
 - **Full:** validated interventions execute without an approval pause.
+
+---
+
+## Forecasting the next failure
+
+The audit trail is also a dataset. A separate agent reads it and answers a
+different question from the investigation loop: not what is wrong now, but what
+is likely to go wrong next. It appears at the top of **Incident history**.
+
+It is built the way the investigation loop is built. Read-only tools supply
+facts -- recurrence statistics over closed incidents, the assets each fault
+class was actually recorded against, and a least-squares fit over the live
+control signals. The model chooses which to read, decides which fault class
+matters, and writes the claim. A deterministic claim check then tests that
+conclusion against the record before an operator sees it.
+
+The claim check rejects a forecast that:
+
+- cites a fault class absent from the record,
+- rests on a class with fewer than three recorded occurrences,
+- names an asset appearing in no recorded diagnosis,
+- projects past the end of the recorded history,
+- or carries a confidence outside (0, 1].
+
+A rejected forecast is returned to the model with the failing checks attached,
+and it revises rather than being discarded.
+
+### What it refuses to say
+
+The refusals matter more than the forecast:
+
+- A fault class seen once has **no interval**. The record reports "single
+  occurrence" rather than inventing a period from one data point.
+- When the time since the last occurrence dwarfs the mean interval between
+  occurrences, the periodic model is reported as **no longer holding** instead
+  of raising an "overdue" alarm the data does not support.
+- A live window that does not fit a line is reported as **not projectable**
+  rather than extrapolated.
+
+The leading indicator for pressure loss is not pressure. A working controller
+holds pressure while it still has authority, so the projection tracks commanded
+pump output climbing toward saturation, past which discharge pressure falls.
+
+### Its limits
+
+The forecast is advisory. It is **not admissible as evidence for an
+intervention**, and the forecasting agent has no write tools -- it cannot reach
+the validator or the executor. A unit test asserts that its tool surface stays
+read-only.
+
+The shipped history spans **13.4 hours across 17 incidents**, so forecasts are
+expressed in hours. The horizon check refuses anything longer than the record;
+this history cannot support a claim about next week.
+
+Offline, a rules baseline composes the same statistics into the same structure
+and is reported as rules rather than as reasoning.
 
 ---
 
@@ -331,7 +390,7 @@ code revision.
 
 ## Inspect the saved investigations
 
-`backend/restorio_audit.db` ships with **16 recorded LLM incidents**.
+`backend/restorio_audit.db` ships with **17 recorded LLM incidents**.
 
 Open **Incident history** in the dashboard to inspect their evidence, explanations,
 interventions, and recovery results.
@@ -347,8 +406,8 @@ reviewer's machine.
 | Component | Responsibility |
 |---|---|
 | `backend/app/sim/` | Dynamic plant, controller, sensors, gateway, decoy, scenarios, validation, and execution |
-| `backend/app/agent/` | Twelve tools, model providers, investigation loop, incident lifecycle, and offline reasoner |
-| `backend/app/store/` | Persistent SQLite incident audit |
+| `backend/app/agent/` | Twelve tools, model providers, investigation loop, incident lifecycle, offline reasoner, and the forecasting agent |
+| `backend/app/store/` | Persistent SQLite incident audit and recurrence analysis |
 | `frontend/` | React and Three.js operator dashboard |
 | `scripts/` | Startup, provider checks, scenario runs, regression tests, and evaluation |
 | `docs/` | Architecture and saved evaluation results |

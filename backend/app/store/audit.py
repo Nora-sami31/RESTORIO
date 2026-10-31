@@ -72,6 +72,21 @@ def list_incidents(limit: int = 60) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def occurrences(limit: int = 500) -> list[dict[str, Any]]:
+    """Just the columns the recurrence analysis needs, oldest first.
+
+    Kept separate from ``list_incidents`` so the forecast can read a long
+    history cheaply without decoding every payload.
+    """
+    with _LOCK, _conn() as c:
+        rows = c.execute(
+            """SELECT scenario_key, status, created_at, duration_s, diagnosis
+               FROM incidents
+               WHERE scenario_key IS NOT NULL AND created_at IS NOT NULL
+               ORDER BY created_at ASC LIMIT ?""", (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_incident(incident_id: str) -> dict[str, Any] | None:
     with _LOCK, _conn() as c:
         row = c.execute("SELECT payload FROM incidents WHERE incident_id = ?",

@@ -263,3 +263,44 @@ select { font: inherit; font-size: 12px; padding: 5px 8px; border-radius: 6px;
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: #223040; border-radius: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------------------------------------------------------------------------
+   Forecast banner — the forward-looking half of the audit trail. It sits at
+   the top of the incident history because it is read from that history.
+   Accented rather than alarming: a forecast is advisory, and colouring it like
+   a fault would put it on the same footing as a measured one.
+   --------------------------------------------------------------------------- */
+.forecast {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  background: #0e151d;
+  padding: 7px 9px;
+  margin-bottom: 8px;
+}
+.forecast-head { display: flex; gap: 5px; align-items: center; }
+.forecast-claim {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink);
+  margin-top: 6px;
+}
+.forecast-meta {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  font-size: 9.5px; color: var(--ink-faint); margin-top: 5px;
+}
+.forecast-meta .ok  { color: var(--ok); }
+.forecast-meta .bad { color: var(--bad); }
+.forecast-watch {
+  margin: 5px 0 0; padding-left: 14px;
+  font-size: 10px; line-height: 1.5; color: var(--ink-dim);
+}
+.forecast-watch li.bad { color: var(--bad); }
+.forecast-more {
+  margin-top: 6px; font-size: 9.5px; padding: 2px 6px;
+}
+.forecast-basis {
+  margin-top: 6px; padding-top: 6px;
+  border-top: 1px dashed var(--line);
+  font-size: 10px; line-height: 1.5; color: var(--ink-dim);
+}
+.forecast-basis b { color: var(--ink); font-weight: 600; }

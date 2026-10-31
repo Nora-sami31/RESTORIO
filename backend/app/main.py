@@ -27,6 +27,8 @@ from .sim import generator as sim_generator
 from .sim.engine import engine
 from .sim.scenarios import SCENARIOS
 from .store import audit
+from .agent import foresight
+from .store import forecast as risk_forecast
 
 app = FastAPI(title="RESTORIO", version="1.0",
               description="Agentic investigation, containment and recovery for "
@@ -279,6 +281,53 @@ async def autonomy(mode: str) -> dict[str, Any]:
 async def incidents() -> dict[str, Any]:
     live = [i.summary() for i in STATE["incidents"].values()]
     return {"live": live, "history": audit.list_incidents()}
+
+
+# The agentic forecast costs a provider call, so it is produced on request and
+# held here rather than recomputed on every dashboard poll.
+_FORECAST: dict[str, Any] = {"result": None}
+
+
+@app.get("/api/forecast")
+async def forecast() -> dict[str, Any]:
+    """The statistics, free, plus whichever agentic forecast was last produced.
+
+    Read-only and advisory. A failure here must never take the dashboard with
+    it, so the whole thing degrades to "unavailable" rather than raising.
+    """
+    try:
+        rows = audit.occurrences()
+        base = risk_forecast.forecast(rows, engine, time.time())
+    except Exception as exc:                       # pragma: no cover - defensive
+        base = {"history": {"available": False, "reason": str(exc),
+                            "incidents": 0, "classes": [], "headline": None},
+                "live": {"available": False, "reason": "history unavailable"}}
+    return base | {"agent": _FORECAST["result"]}
+
+
+@app.post("/api/forecast/run")
+async def forecast_run() -> dict[str, Any]:
+    """Produce an agentic forecast: the model reads the history and concludes.
+
+    In LLM mode this spends a provider call. Offline it falls back to the rules
+    baseline, which is reported as rules rather than as reasoning.
+    """
+    rows = audit.occurrences()
+    if settings.provider == "offline":
+        result = await asyncio.to_thread(
+            foresight.offline_forecast, engine, rows, time.time())
+    else:
+        agent = foresight.ForecastAgent(engine, rows, time.time())
+        try:
+            result = await asyncio.to_thread(agent.run)
+        except Exception as exc:                   # pragma: no cover - defensive
+            result = {"available": False, "agentic": True,
+                      "provider": settings.provider, "reason": str(exc),
+                      "tool_trail": agent.trail, "usage": agent.usage}
+    _FORECAST["result"] = result
+    bus.emit("forecast_ready", {"available": bool(result.get("available")),
+                                "agentic": bool(result.get("agentic"))})
+    return result
 
 
 @app.get("/api/incident/{incident_id}")

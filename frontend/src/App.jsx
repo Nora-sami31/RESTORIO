@@ -183,6 +183,7 @@ export default function App() {
     try {
       const d = await api.incidents()
       setHistoryRows(d.history || [])
+      api.forecast().then(setForecast).catch(() => {})
       if (d.live?.length) {
         const open = d.live[d.live.length - 1]
         incidentId.current = open.incident_id
@@ -192,6 +193,22 @@ export default function App() {
   }, [])
 
   useEffect(() => { refreshIncidents() }, [refreshIncidents])
+
+  // The forecast statistics are free to read, so they load with the trail.
+  // Producing the agent's forecast costs a provider call and happens only
+  // when the operator asks for it.
+  const [forecast, setForecast] = useState(null)
+  const loadForecast = useCallback(async () => {
+    try { setForecast(await api.forecast()) } catch { /* advisory only */ }
+  }, [])
+  const runForecast = useCallback(async () => {
+    try { setForecast(await api.forecast()) } catch { /* ignore */ }
+    try {
+      await api.runForecast()
+      setForecast(await api.forecast())
+    } catch { /* leave the statistics showing */ }
+  }, [])
+  useEffect(() => { loadForecast() }, [loadForecast])
 
   const openHistoric = useCallback(async (id) => {
     try {
@@ -492,7 +509,8 @@ export default function App() {
           <AgentPanel events={events} incident={incident} />
           <DecoyPanel decoy={decoy} gateway={gateway} />
           <IncidentHistory rows={historyRows} viewing={viewingHistoric}
-                           onOpen={openHistoric} onBackToLive={backToLive} />
+                           onOpen={openHistoric} onBackToLive={backToLive}
+                           forecast={forecast} onRunForecast={runForecast} />
         </div>
         )}
       </div>
